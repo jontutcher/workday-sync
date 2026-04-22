@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from googleapiclient.errors import HttpError
+
 from workday_sync.gcal_client import (
     _DEFAULT_SECRETS_PATH,
     _DEFAULT_TOKEN_PATH,
@@ -123,6 +125,11 @@ class TestBuildEventBody:
     def test_date_in_start_datetime(self) -> None:
         body = build_event_body(make_request(date=date(2025, 3, 3)), timezone="Europe/London")
         assert body["start"]["dateTime"].startswith("2025-03-03")
+
+    def test_id_matches_unique_key(self) -> None:
+        req = make_request()
+        body = build_event_body(req, timezone="Europe/London")
+        assert body["id"] == req.unique_key
 
 
 # ── get_credentials ───────────────────────────────────────────────────────────
@@ -332,3 +339,61 @@ class TestPushEvents:
         result = push_events([], service)
         assert result == []
         service.events.return_value.insert.assert_not_called()
+
+    def _make_http_error(self, status: int) -> HttpError:
+        resp = type("Response", (), {"status": status, "reason": str(status)})()
+        return HttpError(resp=resp, content=b"already exists")
+
+    def test_409_is_skipped_and_not_in_result(self, mocker) -> None:
+        service = mocker.MagicMock()
+        service.events.return_value.insert.return_value.execute.side_effect = (
+            self._make_http_error(409)
+        )
+
+        result = push_events([make_request()], service)
+
+        assert result == []
+
+    def test_409_does_not_raise(self, mocker) -> None:
+        service = mocker.MagicMock()
+        service.events.return_value.insert.return_value.execute.side_effect = (
+            self._make_http_error(409)
+        )
+
+        push_events([make_request()], service)  # must not raise
+
+    def test_409_is_logged(self, mocker, caplog) -> None:
+        import logging
+
+        service = mocker.MagicMock()
+        service.events.return_value.insert.return_value.execute.side_effect = (
+            self._make_http_error(409)
+        )
+
+        with caplog.at_level(logging.INFO, logger="workday_sync.gcal_client"):
+            push_events([make_request()], service)
+
+        assert any("already exists" in r.message for r in caplog.records)
+
+    def test_non_409_http_error_is_reraised(self, mocker) -> None:
+        service = mocker.MagicMock()
+        service.events.return_value.insert.return_value.execute.side_effect = (
+            self._make_http_error(403)
+        )
+
+        with pytest.raises(HttpError):
+            push_events([make_request()], service)
+
+    def test_409_on_one_event_does_not_block_others(self, mocker) -> None:
+        service = mocker.MagicMock()
+        service.events.return_value.insert.return_value.execute.side_effect = [
+            self._make_http_error(409),
+            {"id": "new-event"},
+        ]
+
+        result = push_events(
+            [make_request(date=date(2025, 3, 3)), make_request(date=date(2025, 3, 10))],
+            service,
+        )
+
+        assert result == [{"id": "new-event"}]

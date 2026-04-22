@@ -6,6 +6,7 @@ via the Google Calendar API (eventType: outOfOffice).
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build as discovery_build
+from googleapiclient.errors import HttpError
 
 from workday_sync.models import AbsenceRequest
 
@@ -26,6 +28,8 @@ _DEFAULT_TOKEN_PATH = _DEFAULT_CONFIG_DIR / "token.json"
 _DEFAULT_SECRETS_PATH = _DEFAULT_CONFIG_DIR / "client_secret.json"
 
 _OOF_DECLINE_MESSAGE = "I am out of office and will respond when I return."
+
+_log = logging.getLogger(__name__)
 
 
 def get_credentials(
@@ -116,6 +120,7 @@ def build_event_body(req: AbsenceRequest, timezone: str) -> dict[str, Any]:
     end_dt = datetime.combine(req.date, end_time)
 
     return {
+        "id": req.unique_key,
         "summary": req.event_title,
         "eventType": "outOfOffice",
         "start": {
@@ -154,12 +159,20 @@ def push_events(
 
     Raises:
         googleapiclient.errors.HttpError: Propagated on API errors (e.g. 429, 403).
+            A 409 (already exists) response is treated as success and silently
+            skipped — the event is omitted from the returned list.
     """
     created: list[dict[str, Any]] = []
     for req in requests:
         body = build_event_body(req, timezone)
-        event = service.events().insert(calendarId=calendar_id, body=body).execute()
-        created.append(event)
+        try:
+            event = service.events().insert(calendarId=calendar_id, body=body).execute()
+            created.append(event)
+        except HttpError as exc:
+            if exc.resp.status == 409:
+                _log.info("Event %s already exists; skipping.", req.unique_key)
+            else:
+                raise
     return created
 
 
