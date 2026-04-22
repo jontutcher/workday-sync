@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from datetime import date, time
@@ -38,6 +39,19 @@ class AbsenceRequest:
     comment: str | None
     status: str
     user_name: str
+
+    @property
+    def unique_key(self) -> str:
+        """SHA-256 hash of absence date, type, start/end times, and status."""
+        start, end = self.time_window()
+        key_str = "|".join([
+            self.date.isoformat(),
+            self.leave_type,
+            start.isoformat(),
+            end.isoformat(),
+            self.status,
+        ])
+        return "wdsync" + hashlib.sha256(key_str.encode()).hexdigest()
 
     @property
     def is_full_day(self) -> bool:
