@@ -88,7 +88,7 @@ class TestTimeWindow:
 class TestUniqueKey:
     def _make_key(self, date_str: str, leave_type: str, start: str, end: str, status: str) -> str:
         key_str = "|".join([date_str, leave_type, start, end, status])
-        return "wdsync" + hashlib.sha256(key_str.encode()).hexdigest()
+        return "absn" + hashlib.sha256(key_str.encode()).hexdigest()
 
     def test_full_day_key_is_sha256_of_fields(self) -> None:
         req = AbsenceRequest(
@@ -153,8 +153,8 @@ class TestUniqueKey:
             date=date(2026, 8, 28), hours=8.0, leave_type="PTO",
             comment=None, status="Approved", user_name="J",
         )
-        assert req.unique_key.startswith("wdsync")
-        hex_part = req.unique_key[len("wdsync"):]
+        assert req.unique_key.startswith("absn")
+        hex_part = req.unique_key[len("absn"):]
         assert len(hex_part) == 64
         assert all(c in "0123456789abcdef" for c in hex_part)
 

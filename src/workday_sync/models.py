@@ -51,7 +51,7 @@ class AbsenceRequest:
             end.isoformat(),
             self.status,
         ])
-        return "wdsync" + hashlib.sha256(key_str.encode()).hexdigest()
+        return "absn" + hashlib.sha256(key_str.encode()).hexdigest()
 
     @property
     def is_full_day(self) -> bool:
