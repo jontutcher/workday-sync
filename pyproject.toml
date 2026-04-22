@@ -9,6 +9,9 @@ authors = [
 requires-python = ">=3.14"
 dependencies = [
     "click>=8.1",
+    "google-api-python-client>=2.167.0",
+    "google-auth>=2.38.0",
+    "google-auth-oauthlib>=1.2.0",
     "icalendar>=6.0",
     "openpyxl>=3.1",
     "pytz>=2024.1",
@@ -19,9 +22,10 @@ workday-sync = "workday_sync.cli:cli"
 
 [dependency-groups]
 dev = [
+    "freezegun>=1.5",
     "pytest>=8.0",
     "pytest-cov>=5.0",
-    "freezegun>=1.5",
+    "pytest-mock>=3.14",
 ]
 
 [build-system]

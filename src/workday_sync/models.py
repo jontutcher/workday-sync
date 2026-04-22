@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, time
 from enum import Enum
 
 
@@ -50,3 +50,18 @@ class AbsenceRequest:
     @property
     def event_title(self) -> str:
         return f"{self.user_name} - {self.leave_type}"
+
+    def time_window(self) -> tuple[time, time]:
+        """Return the (start, end) local times for this absence event.
+
+        Full day  → 08:00–18:00
+        Morning   → 08:00–12:00  (comment contains morning/AM keyword)
+        Afternoon → 13:00–18:00  (comment contains afternoon/PM keyword)
+        Unknown   → 08:00–12:00  (default when comment gives no hint)
+        """
+        if self.is_full_day:
+            return time(8, 0), time(18, 0)
+        period = HalfDayPeriod.from_comment(self.comment)
+        if period is HalfDayPeriod.AFTERNOON:
+            return time(13, 0), time(18, 0)
+        return time(8, 0), time(12, 0)

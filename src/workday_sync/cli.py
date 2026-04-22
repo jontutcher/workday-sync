@@ -42,11 +42,39 @@ def cli() -> None:
         "via ICS and will treat these as regular busy events regardless."
     ),
 )
+@click.option(
+    "--gcal",
+    is_flag=True,
+    default=False,
+    help=(
+        "Push absences directly to Google Calendar as native Out of Office events. "
+        "Opens a browser for OAuth authentication on first use. "
+        "Token is cached at ~/.config/workday-sync/token.json."
+    ),
+)
+@click.option(
+    "--calendar-id",
+    default="primary",
+    show_default=True,
+    help="Google Calendar ID to create events in (e.g. 'primary' or 'team@example.com').",
+)
+@click.option(
+    "--client-secrets",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help=(
+        "Path to OAuth client_secret.json from Google Cloud Console. "
+        "Defaults to ~/.config/workday-sync/client_secret.json."
+    ),
+)
 def convert(
     input_xlsx: Path,
     output: Path | None,
     timezone: str,
     out_of_office: bool,
+    gcal: bool,
+    calendar_id: str,
+    client_secrets: Path | None,
 ) -> None:
     """Convert INPUT_XLSX (a Workday absence export) to an ICS file.
 
@@ -61,6 +89,8 @@ def convert(
       workday-sync convert absences.xlsx
       workday-sync convert absences.xlsx --output calendar.ics
       workday-sync convert absences.xlsx --timezone America/New_York --out-of-office
+      workday-sync convert absences.xlsx --gcal
+      workday-sync convert absences.xlsx --gcal --output calendar.ics
     """
     # Validate timezone before doing any work
     try:
@@ -75,10 +105,41 @@ def convert(
     result = parse_xlsx(input_xlsx)
     for warning in result.warnings:
         click.echo(f"Warning: {warning}", err=True)
-    ics_content = build_ics(result.requests, timezone=timezone, out_of_office=out_of_office)
 
-    if output is None:
-        click.echo(ics_content, nl=False)
-    else:
-        output.write_text(ics_content, encoding="utf-8")
-        click.echo(f"Written to {output}", err=True)
+    if gcal:
+        if out_of_office and output is None:
+            click.echo(
+                "Warning: --out-of-office has no effect when --gcal is used without --output.",
+                err=True,
+            )
+        from workday_sync import gcal_client  # noqa: PLC0415
+
+        secrets_path = client_secrets or gcal_client._DEFAULT_SECRETS_PATH
+        try:
+            creds = gcal_client.get_credentials(client_secrets_path=secrets_path)
+            service = gcal_client.build_service(creds)
+            created = gcal_client.push_events(
+                result.requests, service, calendar_id=calendar_id, timezone=timezone
+            )
+            click.echo(f"Created {len(created)} event(s) in Google Calendar.", err=True)
+        except FileNotFoundError as exc:
+            raise click.ClickException(str(exc)) from exc
+        except Exception as exc:  # googleapiclient.errors.HttpError or similar
+            try:
+                from googleapiclient.errors import HttpError  # noqa: PLC0415
+
+                if isinstance(exc, HttpError):
+                    raise click.ClickException(
+                        f"Google Calendar API error: {exc.status_code} {exc.reason}"
+                    ) from exc
+            except ImportError:
+                pass
+            raise click.ClickException(str(exc)) from exc
+
+    if output is not None or not gcal:
+        ics_content = build_ics(result.requests, timezone=timezone, out_of_office=out_of_office)
+        if output is None:
+            click.echo(ics_content, nl=False)
+        else:
+            output.write_text(ics_content, encoding="utf-8")
+            click.echo(f"Written to {output}", err=True)

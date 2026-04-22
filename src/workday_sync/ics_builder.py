@@ -3,20 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, time
+from datetime import datetime
 
 import pytz
 from icalendar import Calendar, Event, vText
 
-from workday_sync.models import AbsenceRequest, HalfDayPeriod
-
-# Event time windows (local time)
-_FULL_DAY_START = time(8, 0)
-_FULL_DAY_END = time(18, 0)
-_MORNING_START = time(8, 0)
-_MORNING_END = time(12, 0)
-_AFTERNOON_START = time(13, 0)
-_AFTERNOON_END = time(18, 0)
+from workday_sync.models import AbsenceRequest
 
 
 def build_ics(
@@ -51,7 +43,7 @@ def build_ics(
 
 def _build_event(req: AbsenceRequest, tz: pytz.BaseTzInfo, out_of_office: bool) -> Event:
     """Build a single VEVENT component from an AbsenceRequest."""
-    start_time, end_time = _resolve_times(req)
+    start_time, end_time = req.time_window()
 
     dtstart = tz.localize(datetime.combine(req.date, start_time))
     dtend = tz.localize(datetime.combine(req.date, end_time))
@@ -68,16 +60,3 @@ def _build_event(req: AbsenceRequest, tz: pytz.BaseTzInfo, out_of_office: bool) 
         event.add("X-MICROSOFT-CDO-BUSYSTATUS", vText("OOF"))
 
     return event
-
-
-def _resolve_times(req: AbsenceRequest) -> tuple[time, time]:
-    """Return (start_time, end_time) for the event based on hours and comment."""
-    if req.is_full_day:
-        return _FULL_DAY_START, _FULL_DAY_END
-
-    period = HalfDayPeriod.from_comment(req.comment)
-    if period is HalfDayPeriod.AFTERNOON:
-        return _AFTERNOON_START, _AFTERNOON_END
-
-    # MORNING or UNKNOWN — default to morning
-    return _MORNING_START, _MORNING_END
