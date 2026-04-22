@@ -30,3 +30,10 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+# Install from GitHub Packages:
+#   uv add workday-sync \
+#     --index https://<username>:<token>@pypi.pkg.github.com/jon-tutcher
+# or:
+#   pip install workday-sync \
+#     --index-url https://<username>:<token>@pypi.pkg.github.com/jon-tutcher
