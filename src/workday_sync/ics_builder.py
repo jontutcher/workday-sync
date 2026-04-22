@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 
 import pytz
@@ -54,7 +53,7 @@ def _build_event(req: AbsenceRequest, tz: pytz.BaseTzInfo, out_of_office: bool) 
     event.add("DTEND", dtend)
     event.add("TRANSP", "OPAQUE")
     event.add("STATUS", "CONFIRMED")
-    event.add("UID", str(uuid.uuid4()))
+    event.add("UID", req.unique_key)
 
     if out_of_office:
         event.add("X-MICROSOFT-CDO-BUSYSTATUS", vText("OOF"))

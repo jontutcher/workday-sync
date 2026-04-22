@@ -112,6 +112,18 @@ class TestBuildIcs:
         cal = parse_ics(result)
         assert len(get_events(cal)) == 0
 
+    def test_uid_matches_unique_key(self) -> None:
+        req = make_request()
+        cal = parse_ics(build_ics([req], timezone="Europe/London"))
+        event = get_events(cal)[0]
+        assert str(event["UID"]) == req.unique_key
+
+    def test_uid_is_stable_across_calls(self) -> None:
+        req = make_request()
+        uid1 = str(get_events(parse_ics(build_ics([req], timezone="Europe/London")))[0]["UID"])
+        uid2 = str(get_events(parse_ics(build_ics([req], timezone="Europe/London")))[0]["UID"])
+        assert uid1 == uid2
+
 
 class TestBuildIcsOutOfOffice:
     def test_no_oof_extension_by_default(self) -> None:
