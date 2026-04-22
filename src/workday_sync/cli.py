@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import click
@@ -37,7 +36,11 @@ def cli() -> None:
     "--out-of-office",
     is_flag=True,
     default=False,
-    help="Add Out of Office vendor extensions (X-MICROSOFT-CDO-BUSYSTATUS:OOF) to events.",
+    help=(
+        "Add X-MICROSOFT-CDO-BUSYSTATUS:OOF to each event. "
+        "Recognised by Outlook/Exchange; Google Calendar cannot import OOF event types "
+        "via ICS and will treat these as regular busy events regardless."
+    ),
 )
 def convert(
     input_xlsx: Path,

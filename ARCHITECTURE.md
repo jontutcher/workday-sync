@@ -77,8 +77,13 @@ Converts a list of `AbsenceRequest` objects into an ICS string.
 - `STATUS`: `CONFIRMED`
 
 **Out of Office mode** (enabled via `--out-of-office`):
-- Adds `X-MICROSOFT-CDO-BUSYSTATUS:OOF` (respected by Outlook/Exchange, and partially by Google Calendar when importing)
-- Adds `X-GOOGLE-CALENDAR-CONTENT-DISPLAY:chip` (Google Calendar hint)
+- Adds `X-MICROSOFT-CDO-BUSYSTATUS:OOF` — recognised by Outlook/Exchange calendar clients.
+
+> **Google Calendar limitation:** Google Calendar's ICS import converts *all* imported events
+> to `eventType: default`, silently dropping any OOF designation. The only way to create a
+> native Google "Out of Office" event is via the Google Calendar API (`eventType: outOfOffice`).
+> The `--out-of-office` flag is therefore most useful when sharing the ICS with Outlook/Exchange
+> users, or as future groundwork for a Google Calendar API integration.
 
 ### `workday_sync/cli.py`
 
@@ -90,7 +95,7 @@ workday-sync convert <INPUT_XLSX> [OPTIONS]
 Options:
   --output PATH         Output ICS file path [default: stdout]
   --timezone TEXT       Timezone for events (e.g. Europe/London) [default: Europe/London]
-  --out-of-office       Add Out of Office vendor extensions to events
+  --out-of-office       Add X-MICROSOFT-CDO-BUSYSTATUS:OOF (Outlook/Exchange only)
   --help                Show this message and exit.
 ```
 
