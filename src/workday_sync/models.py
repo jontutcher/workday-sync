@@ -49,4 +49,4 @@ class AbsenceRequest:
 
     @property
     def event_title(self) -> str:
-        return f"{self.user_name} - PTO"
+        return f"{self.user_name} - {self.leave_type}"

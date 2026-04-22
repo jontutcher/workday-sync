@@ -49,10 +49,15 @@ class TestBuildIcs:
         cal = parse_ics(build_ics(requests, timezone="Europe/London"))
         assert len(get_events(cal)) == 2
 
-    def test_event_title(self) -> None:
+    def test_event_title_uses_leave_type(self) -> None:
         cal = parse_ics(build_ics([make_request()], timezone="Europe/London"))
         event = get_events(cal)[0]
-        assert str(event["SUMMARY"]) == "Jon Tutcher - PTO"
+        assert str(event["SUMMARY"]) == "Jon Tutcher - Paid Time Off"
+
+    def test_event_title_reflects_sick_leave(self) -> None:
+        cal = parse_ics(build_ics([make_request(leave_type="Sick Time")], timezone="Europe/London"))
+        event = get_events(cal)[0]
+        assert str(event["SUMMARY"]) == "Jon Tutcher - Sick Time"
 
     def test_full_day_starts_at_0800(self) -> None:
         cal = parse_ics(build_ics([make_request(hours=8.0)], timezone="Europe/London"))

@@ -21,9 +21,9 @@ class TestConvertCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["convert", str(sample_xlsx)])
         assert result.exit_code == 0
-        assert "BEGIN:VCALENDAR" in result.output
-        assert "BEGIN:VEVENT" in result.output
-        assert "Alex Sample - PTO" in result.output
+        assert "BEGIN:VCALENDAR" in result.stdout
+        assert "BEGIN:VEVENT" in result.stdout
+        assert "Alex Sample - Paid Time Off" in result.stdout
 
     def test_convert_writes_to_file(self, sample_xlsx: Path, tmp_path: Path) -> None:
         out_file = tmp_path / "output.ics"
@@ -40,7 +40,7 @@ class TestConvertCommand:
             cli, ["convert", str(sample_xlsx), "--timezone", "America/New_York"]
         )
         assert result.exit_code == 0
-        assert "BEGIN:VCALENDAR" in result.output
+        assert "BEGIN:VCALENDAR" in result.stdout
 
     def test_invalid_timezone_shows_error(self, sample_xlsx: Path) -> None:
         runner = CliRunner()
@@ -57,10 +57,21 @@ class TestConvertCommand:
         runner = CliRunner()
         result = runner.invoke(cli, ["convert", str(sample_xlsx), "--out-of-office"])
         assert result.exit_code == 0
-        assert "OOF" in result.output
+        assert "OOF" in result.stdout
 
     def test_default_timezone_is_london(self, sample_xlsx: Path) -> None:
         runner = CliRunner()
         result = runner.invoke(cli, ["convert", str(sample_xlsx)])
         assert result.exit_code == 0
-        assert "Europe/London" in result.output or "GMT" in result.output or "BST" in result.output
+        assert "Europe/London" in result.stdout or "GMT" in result.stdout or "BST" in result.stdout
+
+    def test_ambiguous_half_day_warning_on_stderr(self, sample_xlsx: Path) -> None:
+        """Ambiguous half-day warnings must appear on stderr, not mixed into ICS stdout."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["convert", str(sample_xlsx)])
+        assert result.exit_code == 0
+        # Warning appears on stderr
+        assert "Warning:" in result.stderr
+        assert "2025-03-31" in result.stderr
+        # ICS stdout is clean of warning text
+        assert "Warning:" not in result.stdout

@@ -8,3 +8,4 @@ dist/
 build/
 .coverage
 htmlcov/
+CODE_REVIEW.md

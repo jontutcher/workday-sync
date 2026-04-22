@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import warnings
 from datetime import date, datetime
 from pathlib import Path
+from typing import NamedTuple
 
 import openpyxl
 
@@ -25,19 +25,31 @@ _COLUMN_MAP = {
     "status": "status",
 }
 
+# Hours per working day — used to normalise Day-unit rows
+_HOURS_PER_DAY = 8.0
 
-def parse_xlsx(path: Path) -> list[AbsenceRequest]:
-    """Parse a Workday absence XLSX export and return a list of AbsenceRequest objects.
+
+class ParseResult(NamedTuple):
+    """Return value of :func:`parse_xlsx`."""
+
+    requests: list[AbsenceRequest]
+    warnings: list[str]
+
+
+def parse_xlsx(path: Path) -> ParseResult:
+    """Parse a Workday absence XLSX export and return a ParseResult.
 
     Args:
         path: Path to the .xlsx file.
 
     Returns:
-        List of AbsenceRequest objects, one per data row.
+        A ParseResult containing the parsed requests and any user-facing
+        warning messages (e.g. ambiguous half-day periods).
 
     Raises:
         FileNotFoundError: If the file does not exist.
-        ValueError: If the file does not look like a Workday absence export.
+        ValueError: If the file does not look like a Workday absence export,
+            or contains an unsupported unit of time.
     """
     path = Path(path)
     if not path.exists():
@@ -50,6 +62,8 @@ def parse_xlsx(path: Path) -> list[AbsenceRequest]:
     col_indices = _extract_column_indices(ws)
 
     requests: list[AbsenceRequest] = []
+    parse_warnings: list[str] = []
+
     for row in ws.iter_rows(min_row=_DATA_START_ROW, values_only=True):
         if not any(row):
             break
@@ -59,7 +73,9 @@ def parse_xlsx(path: Path) -> list[AbsenceRequest]:
             continue
 
         parsed_date = _parse_date(raw_date)
-        hours = float(row[col_indices["hours"]] or 0)
+        raw_hours = float(row[col_indices["hours"]] or 0)
+        unit = str(row[col_indices["unit_of_time"]] or "").strip()
+        hours = _normalize_to_hours(raw_hours, unit)
         leave_type = str(row[col_indices["leave_type"]] or "")
         comment_raw = row[col_indices["comment"]]
         comment = str(comment_raw).strip() if comment_raw is not None else None
@@ -75,16 +91,37 @@ def parse_xlsx(path: Path) -> list[AbsenceRequest]:
         )
 
         if req.is_half_day and HalfDayPeriod.from_comment(comment) is HalfDayPeriod.UNKNOWN:
-            warnings.warn(
+            parse_warnings.append(
                 f"Half-day on {parsed_date} has no AM/PM indicator in comment "
-                f"({comment!r}). Defaulting to morning (08:00–12:00).",
-                UserWarning,
-                stacklevel=2,
+                f"({comment!r}). Defaulting to morning (08:00–12:00)."
             )
 
         requests.append(req)
 
-    return requests
+    return ParseResult(requests=requests, warnings=parse_warnings)
+
+
+def _normalize_to_hours(value: float, unit: str) -> float:
+    """Convert a Workday 'Requested' value to hours based on its unit.
+
+    Args:
+        value: The numeric quantity from the 'Requested' column.
+        unit: The string from the 'Unit of Time' column (e.g. 'Hours', 'Days').
+
+    Returns:
+        The equivalent duration in hours.
+
+    Raises:
+        ValueError: If *unit* is not 'Hours' or 'Days'.
+    """
+    unit_lower = unit.lower()
+    if unit_lower == "hours":
+        return value
+    if unit_lower == "days":
+        return value * _HOURS_PER_DAY
+    raise ValueError(
+        f"Unsupported unit of time: {unit!r}. Expected 'Hours' or 'Days'."
+    )
 
 
 def _extract_user_name(ws: openpyxl.worksheet.worksheet.Worksheet) -> str:
@@ -107,7 +144,9 @@ def _extract_column_indices(ws: openpyxl.worksheet.worksheet.Worksheet) -> dict[
         try:
             indices[field] = header_row.index(header)
         except ValueError as e:
-            raise ValueError(f"Expected column {header!r} not found in headers: {header_row}") from e
+            raise ValueError(
+                f"Expected column {header!r} not found in headers: {header_row}"
+            ) from e
     return indices
 
 

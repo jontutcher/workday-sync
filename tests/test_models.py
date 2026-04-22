@@ -34,7 +34,7 @@ class TestAbsenceRequest:
         assert req.is_full_day is False
         assert req.is_half_day is True
 
-    def test_event_title(self) -> None:
+    def test_event_title_uses_leave_type(self) -> None:
         req = AbsenceRequest(
             date=date(2026, 8, 28),
             hours=8.0,
@@ -43,7 +43,18 @@ class TestAbsenceRequest:
             status="Approved",
             user_name="Jon Tutcher",
         )
-        assert req.event_title == "Jon Tutcher - PTO"
+        assert req.event_title == "Jon Tutcher - Paid Time Off"
+
+    def test_event_title_reflects_sick_leave(self) -> None:
+        req = AbsenceRequest(
+            date=date(2026, 8, 28),
+            hours=8.0,
+            leave_type="Sick Time",
+            comment=None,
+            status="Approved",
+            user_name="Jon Tutcher",
+        )
+        assert req.event_title == "Jon Tutcher - Sick Time"
 
 
 class TestHalfDayPeriod:

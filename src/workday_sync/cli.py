@@ -72,8 +72,10 @@ def convert(
             param_hint="--timezone",
         )
 
-    requests = parse_xlsx(input_xlsx)
-    ics_content = build_ics(requests, timezone=timezone, out_of_office=out_of_office)
+    result = parse_xlsx(input_xlsx)
+    for warning in result.warnings:
+        click.echo(f"Warning: {warning}", err=True)
+    ics_content = build_ics(result.requests, timezone=timezone, out_of_office=out_of_office)
 
     if output is None:
         click.echo(ics_content, nl=False)
