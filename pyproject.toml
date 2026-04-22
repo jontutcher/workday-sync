@@ -1,6 +1,6 @@
 [project]
 name = "workday-sync"
-version = "0.3.1"
+version = "0.3.2"
 description = "Convert Workday absence requests to a Google Calendar ICS file"
 readme = "README.md"
 authors = [
