@@ -53,6 +53,8 @@ def get_credentials(
     Raises:
         FileNotFoundError: If client_secrets_path does not exist.
     """
+    _log.debug("Loading credentials (secrets=%s, token=%s)", client_secrets_path, token_path)
+
     if not client_secrets_path.exists():
         raise FileNotFoundError(
             f"client_secret.json not found at {client_secrets_path}.\n\n"
@@ -69,22 +71,31 @@ def get_credentials(
     creds: Credentials | None = None
 
     if token_path.exists():
+        _log.debug("Found cached token at %s", token_path)
         creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+    else:
+        _log.debug("No cached token found")
 
     if creds and creds.valid:
+        _log.debug("Cached token is valid")
         return creds
 
     if creds and creds.expired and creds.refresh_token:
+        _log.debug("Token expired; attempting refresh")
         try:
             creds.refresh(Request())
+            _log.debug("Token refreshed successfully")
         except RefreshError:
             # Refresh token revoked — delete stale cache and re-authenticate
+            _log.debug("Refresh token revoked; deleting stale cache and re-authenticating")
             token_path.unlink(missing_ok=True)
             creds = None
 
     if creds is None or not creds.valid:
+        _log.debug("Running browser OAuth flow")
         flow = InstalledAppFlow.from_client_secrets_file(str(client_secrets_path), SCOPES)
         creds = flow.run_local_server(port=0)
+        _log.debug("Browser OAuth flow complete")
 
     _save_token(creds, token_path)
     return creds
@@ -118,6 +129,11 @@ def build_event_body(req: AbsenceRequest, timezone: str) -> dict[str, Any]:
 
     start_dt = datetime.combine(req.date, start_time)
     end_dt = datetime.combine(req.date, end_time)
+
+    _log.debug(
+        "Building event body: date=%s leave_type=%r id=%s start=%s end=%s",
+        req.date, req.leave_type, req.unique_key, start_dt, end_dt,
+    )
 
     return {
         "id": req.unique_key,
@@ -162,16 +178,26 @@ def push_events(
             A 409 (already exists) response is treated as success and silently
             skipped — the event is omitted from the returned list.
     """
+    _log.debug(
+        "push_events: %d request(s) → calendar_id=%r timezone=%r",
+        len(requests), calendar_id, timezone,
+    )
     created: list[dict[str, Any]] = []
     for req in requests:
         body = build_event_body(req, timezone)
+        _log.debug("Inserting event id=%s (%s %s)", req.unique_key, req.date, req.leave_type)
         try:
             event = service.events().insert(calendarId=calendar_id, body=body).execute()
+            _log.debug("Created event id=%s gcal_id=%s", req.unique_key, event.get("id"))
             created.append(event)
         except HttpError as exc:
             if exc.resp.status == 409:
                 _log.info("Event %s already exists; skipping.", req.unique_key)
             else:
+                _log.debug(
+                    "HTTP %s error for event %s: %s",
+                    exc.resp.status, req.unique_key, exc.content,
+                )
                 raise
     return created
 

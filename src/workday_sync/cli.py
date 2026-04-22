@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import click
@@ -11,12 +12,7 @@ from workday_sync.ics_builder import build_ics
 from workday_sync.parser import parse_xlsx
 
 
-@click.group()
-def cli() -> None:
-    """workday-sync: Convert a Workday absence export to a Google Calendar ICS file."""
-
-
-@cli.command()
+@click.command()
 @click.argument("input_xlsx", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option(
     "--output",
@@ -67,7 +63,13 @@ def cli() -> None:
         "Defaults to ~/.config/workday-sync/client_secret.json."
     ),
 )
-def convert(
+@click.option(
+    "--debug",
+    is_flag=True,
+    default=False,
+    help="Enable debug logging to stderr.",
+)
+def cli(
     input_xlsx: Path,
     output: Path | None,
     timezone: str,
@@ -75,6 +77,7 @@ def convert(
     gcal: bool,
     calendar_id: str,
     client_secrets: Path | None,
+    debug: bool,
 ) -> None:
     """Convert INPUT_XLSX (a Workday absence export) to an ICS file.
 
@@ -86,12 +89,15 @@ def convert(
 
     \b
     Examples:
-      workday-sync convert absences.xlsx
-      workday-sync convert absences.xlsx --output calendar.ics
-      workday-sync convert absences.xlsx --timezone America/New_York --out-of-office
-      workday-sync convert absences.xlsx --gcal
-      workday-sync convert absences.xlsx --gcal --output calendar.ics
+      workday-sync absences.xlsx
+      workday-sync absences.xlsx --output calendar.ics
+      workday-sync absences.xlsx --timezone America/New_York --out-of-office
+      workday-sync absences.xlsx --gcal
+      workday-sync absences.xlsx --gcal --output calendar.ics
     """
+    if debug:
+        logging.basicConfig(level=logging.DEBUG, format="%(name)s %(levelname)s %(message)s")
+
     # Validate timezone before doing any work
     try:
         pytz.timezone(timezone)
@@ -129,8 +135,9 @@ def convert(
                 from googleapiclient.errors import HttpError  # noqa: PLC0415
 
                 if isinstance(exc, HttpError):
+                    body = exc.content.decode("utf-8", errors="replace") if exc.content else ""
                     raise click.ClickException(
-                        f"Google Calendar API error: {exc.status_code} {exc.reason}"
+                        f"Google Calendar API error: {exc.resp.status} {exc.reason}\n{body}"
                     ) from exc
             except ImportError:
                 pass
